@@ -4,12 +4,14 @@ import com.crypto.screener.client.MarketDataClient;
 import com.crypto.screener.client.dto.Candle;
 import com.crypto.screener.client.dto.CandleInterval;
 import com.crypto.screener.client.dto.MarketTicker;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -17,14 +19,22 @@ import java.util.List;
 public class BinanceClient implements MarketDataClient {
     private final WebClient web = WebClient.create("https://api.binance.com");
 
+    private final Flux<MarketTicker> cachedTickers = fetchAllTickersUncached()
+            .cache(Duration.ofSeconds(30));
+
     @Override
     public Flux<MarketTicker> fetchAllTickers() {
+        return cachedTickers;
+    }
+
+    private Flux<MarketTicker> fetchAllTickersUncached() {
         return web.get()
                 .uri("/api/v3/ticker/24hr")
                 .retrieve()
                 .bodyToFlux(BinanceTicker.class)
                 .map(bt -> new MarketTicker(bt.symbol(), bt.lastPrice(), bt.priceChangePercent()));
     }
+
 
     @Override
     public Flux<Candle> fetchCandles(String symbol, CandleInterval interval) {
